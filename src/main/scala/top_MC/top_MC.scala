@@ -73,6 +73,9 @@ class top_MC(BinaryFile: String, DataFile: String) extends Module {
   IF.io.branchAddr         := EX.io.branchTarget
   IF.io.branchMispredicted := HzdUnit.io.branchMispredicted
   IF.io.PCplus4ExStage     := EX.io.outPCplus4
+  IF.io.exBranchAddr       := 0.U
+  IF.io.exUpdatePrediction := false.B
+  IF.io.exBranchTaken := false.B
 
   //Signals to IFBarrier
   IFBarrier.inCurrentPC        := IF.io.PC

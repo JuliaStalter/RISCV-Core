@@ -20,40 +20,41 @@ class Branch_OP extends Module {
       val branchType  = Input(UInt(32.W))
       val src1        = Input(UInt(32.W))
       val src2        = Input(UInt(32.W))
-      val branchTaken = Output(UInt(32.W))
+      val branchTaken = Output(Bool())
+      val branchTarget = Output(UInt(32.W))
     }
   )
 
+  io.branchTaken := false.B
+  io.branchTarget := 0.U
+
   //Branch lookup
-  io.branchTaken := 0.U
   val lhs = io.src1.asSInt
   val rhs = io.src2.asSInt
   switch(io.branchType) {
     is(beq) {
-      io.branchTaken := (lhs === rhs)
+      io.branchTaken := (lhs === rhs).asBool()
     }
     is(neq) {
-      io.branchTaken := (lhs =/= rhs)
+      io.branchTaken := (lhs =/= rhs).asBool()
     }
     is(gte) {
-      io.branchTaken := (lhs >= rhs)
+      io.branchTaken := (lhs >= rhs).asBool()
     }
     is(lt) {
-      io.branchTaken := (lhs < rhs)
+      io.branchTaken := (lhs < rhs).asBool()
     }
     is(gteu) {
-      io.branchTaken := (lhs >= rhs)
+      io.branchTaken := (lhs >= rhs).asBool()
     }
     is(ltu) {
-      io.branchTaken := (lhs < rhs)
+      io.branchTaken := (lhs < rhs).asBool()
     }
     is(jump) {
-      io.branchTaken := (1.U)
+      io.branchTaken := true.B
     }
     is(DC) {
-      io.branchTaken := (0.U)
+      io.branchTaken := false.B
     }
   }
-
-
 }
