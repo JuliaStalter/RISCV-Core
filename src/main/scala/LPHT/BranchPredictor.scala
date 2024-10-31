@@ -57,6 +57,6 @@ class BranchPredictor extends Module {
 
     val newLHTValue = Cat(lht(lhtIndex)(log2Ceil(PHT_SIZE) - 2,0), io.branchTaken)
     lht(lhtIndex) := newLHTValue
-  }
 
+  }
 }
