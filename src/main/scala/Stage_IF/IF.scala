@@ -106,7 +106,7 @@ class IF(BinaryFile: String) extends Module {
         nextPC := io.PCplus4ExStage
       }
   }
-    .elsewhen(BranchPredictor.io.predictTaken) {  // Use branch predictor
+    .elsewhen(BranchPredictor.io.prediction) {  // Use branch predictor
       nextPC := BranchPredictor.io.nextPC
     }
     .otherwise {  // Normal instruction OR assume not taken (BTB miss)

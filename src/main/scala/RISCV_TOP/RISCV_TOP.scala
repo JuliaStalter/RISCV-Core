@@ -81,4 +81,6 @@ class RISCV_TOP(BinaryFile: String = "src/test/programs/beq_test", DataFile: Str
   io.memDeviceWriteEnable   := top_MC.memUpdates.writeEnable
   io.memDeviceWriteData     := top_MC.memUpdates.writeData
 
+
 }
+

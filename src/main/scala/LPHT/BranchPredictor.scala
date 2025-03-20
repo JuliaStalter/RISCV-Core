@@ -15,48 +15,44 @@ class BranchPredictor extends Module {
   val io = IO(new Bundle {
 
     val pc = Input(UInt(32.W))
+    val prediction = Output(Bool())
+    val nextPC = Output(UInt(32.W))
+
+
     val branchTaken = Input(Bool())
     val branchTarget = Input(UInt(32.W))
     val update = Input(Bool())
+
     val predictTaken = Output(Bool())
-    val nextPC = Output(UInt(32.W))
+
   })
 
-  val LHT_SIZE = 1024
-  val PHT_SIZE = 256
+  val lht = RegInit(0.U(2.W))
+  val pcLast = RegInit(0.U(32.W))
+  val nextPCReg = RegInit(0.U(32.W))
 
-  val lht = Mem(LHT_SIZE, UInt(log2Ceil(PHT_SIZE).W))
-  val pht = Mem(PHT_SIZE, UInt(2.W))
+  val taken = Wire(Bool())
+  taken := false.B
 
-  val lhtIndex = io.pc(log2Ceil(LHT_SIZE) - 1,0)
-  val phtIndex = lht(lhtIndex)
-
-  val counter = pht(phtIndex)
-  io.predictTaken := counter(1)
-  io.nextPC := Mux(io.predictTaken, io.branchTarget, io.pc + 4.U)
-
-  when(io.update){
-
-    when(io.branchTaken){
-
-      when(counter =/= 3.U) {
-
-        pht(phtIndex) := counter + 1.U
-
-      }
-
-    }.otherwise {
-
-      when(counter =/= 0.U){
-
-        pht(phtIndex) := counter - 1.U
-
-      }
-
-    }
-
-    val newLHTValue = Cat(lht(lhtIndex)(log2Ceil(PHT_SIZE) - 2,0), io.branchTaken)
-    lht(lhtIndex) := newLHTValue
-
+  when (io.update){
+    taken := io.pc === pcLast
+    lht := Cat(taken, lht(0))
+    pcLast := io.pc
   }
+io.prediction := true.B
+
+  switch(Cat(lht(0), lht(1))){
+
+  is("b11".U) {io.prediction := true.B }
+  is("b00".U) {io.prediction := false.B}
+  is("b10".U) {io.prediction := false.B}
+  is("b01".U) {io.prediction := true.B }
+  //default {io.prediction := false.B}
+}
+  nextPCReg := Mux(io.prediction, io.branchTarget, io.pc + 4.U)
+  io.nextPC := nextPCReg
+
+
+  io.predictTaken := io.branchTaken === io.prediction
+
 }

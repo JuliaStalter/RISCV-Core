@@ -1,31 +1,46 @@
 package LPHT
+
 import chisel3._
 import chiseltest._
 import org.scalatest.flatspec.AnyFlatSpec
 
 class BranchPredictorTest extends AnyFlatSpec with ChiselScalatestTester {
-  behavior of "BranchPredictor"
 
-  it should "correctly predict branch outcomes" in {
+  "BranchPredictor" should "predict branches correctly in a loop pattern" in {
     test(new BranchPredictor) { dut =>
-      // Define a sequence of PCs and branch outcomes
-      val testCases = Seq(
-        (0x00000000.U, false.B),
-        (0x00000004.U, true.B),
-        (0x00000008.U, false.B),
-        (0x0000000C.U, true.B),
-        (0x00000010.U, true.B)
-      )
 
-      // Test each case
-      for ((pc, branchTaken) <- testCases) {
-        dut.io.pc.poke(pc)
-        dut.io.branchTaken.poke(branchTaken)
+
+      val loopStart = 0x100.U
+      val loopEnd = 0x120.U
+      val loopTarget = loopStart
+      val numIterations = 10
+
+
+      dut.io.pc.poke(0.U)
+      dut.io.branchTaken.poke(false.B)
+      dut.io.branchTarget.poke(0.U)
+      dut.io.update.poke(false.B)
+      dut.clock.step(5)
+
+
+      for (i <- 0 until numIterations) {
+        dut.io.pc.poke(loopEnd)
+        dut.io.branchTaken.poke(true.B)
+        dut.io.branchTarget.poke(loopTarget)
+        dut.io.update.poke(true.B)
         dut.clock.step(1)
 
-        // Verify prediction
-        val expectedPrediction = false.B // Adjust based on your predictor logic
-        dut.io.predictTaken.expect(expectedPrediction)
+
+        dut.io.pc.poke(loopEnd)
+        dut.io.update.poke(false.B)
+        dut.clock.step(1)
+
+        val prediction = dut.io.prediction.peek().litToBoolean
+        println(s"Iteration $i: Prediction = $prediction")
+
+        if (i > 3) {
+          assert(prediction == true, s"Failed at iteration $i: expected true")
+        }
       }
     }
   }
