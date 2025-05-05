@@ -44,10 +44,14 @@ class RISCV_TOP(BinaryFile: String = "src/test/programs/beq_test", DataFile: Str
       val memDeviceWriteEnable   = Output(Bool())
       val memDeviceWriteData     = Output(UInt(32.W))
       val memDeviceWriteAddress     = Output(UInt(32.W))
+      val ecall = Output(Bool())
+      val correctPrediction = Output(Bool())
 
 
+      //for choosing witch predictor to use: 0 : none, 1: lpht, 2: gpht, 3:hybrid
 
-
+      val predictorMode       = Input(UInt(2.W))
+      val resetStats = Input(Bool())
     })
 
   val top_MC = Module(new top_MC(BinaryFile, DataFile)).testHarness
@@ -70,6 +74,8 @@ class RISCV_TOP(BinaryFile: String = "src/test/programs/beq_test", DataFile: Str
   top_MC.setupSignals.registerSignals.writeData    := io.regsWriteData
   top_MC.setupSignals.registerSignals.setup        := io.setup
 
+  top_MC.predictorMode := io.predictorMode // for predictor mode set
+  top_MC.resetStats := io.resetStats
   io.DMEMReadData := top_MC.testReadouts.DMEMread
   io.regsReadData := top_MC.testReadouts.registerRead
 
@@ -80,7 +86,7 @@ class RISCV_TOP(BinaryFile: String = "src/test/programs/beq_test", DataFile: Str
   io.memDeviceWriteAddress  := top_MC.memUpdates.writeAddress
   io.memDeviceWriteEnable   := top_MC.memUpdates.writeEnable
   io.memDeviceWriteData     := top_MC.memUpdates.writeData
-
-
+  io.ecall := top_MC.testReadouts.ecall
+  io.correctPrediction := top_MC.correctPrediction
 }
 

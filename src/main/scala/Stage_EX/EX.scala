@@ -52,6 +52,10 @@ class EX extends Module {
       val exBranchTaken = Output(Bool())
       val exBranchAddr = Output(UInt(32.W))
       val exUpdatePrediction = Output(Bool())
+      val predictorMode = Input(UInt(2.W))
+      val resetStats = Input(Bool())
+      val cycleCounter = Input(UInt(32.W))
+      val ecall = Output(Bool()) // using to stop the test for branch predictors
     }
   )
 
@@ -77,6 +81,13 @@ class EX extends Module {
   val alu_operand1 = Wire(UInt())
   val alu_operand2 = Wire(UInt())
   val PCplus4 = Wire(UInt(32.W))
+
+
+  //input for global pattern history table :
+  val totalBranches = RegInit(0.U(32.W))
+  val correctPredictions = RegInit(0.U(32.W))
+  val mispredictions = RegInit(0.U(32.W))
+
   // Control signals to ALU and Branch
   ResolveBranch.branchType := io.branchType
   ALU.ALUop := io.ALUop
@@ -145,4 +156,63 @@ ALU.src2 := Mux(io.op2Select === op2sel.rs2, alu_operand2, io.immData)
   io.exBranchTaken := io.branchTaken
   io.exBranchAddr := ResolveBranch.branchTarget
   io.exUpdatePrediction := io.updatePrediction
+
+  // Prediciton Accuracy
+
+  val actualTaken    = ResolveBranch.branchTaken
+  val predictedTaken = io.btbHit // Simplified assumption (can use GPHT output here)
+  val predictedTarget = io.btbTargetPredict
+  val actualTarget   = ResolveBranch.branchTarget
+  val usingPrediction = io.predictorMode =/= 0.U
+  val isBranchInstr =
+                        io.branchType === "b000".U || // beq
+                        io.branchType === "b001".U ||
+                        io.branchType === "b100".U || // blt
+                        io.branchType === "b101".U || // bge
+                        io.branchType === "b110".U || // bltu
+                        io.branchType === "b111".U    // bgeu
+
+  val instr = io.instruction.asUInt
+  val opcode = instr(6, 0)
+  val funct3 = instr(14, 12)
+  val rs1 = instr(19, 15)
+  val rd = instr(11, 7)
+
+val isEcall = opcode === "b1110011".U &&
+              funct3 === 0.U &&
+              rs1 === 0.U &&
+              rd === 0.U
+
+  io.ecall := isEcall
+
+  when(isBranchInstr && usingPrediction) {
+    totalBranches := totalBranches + 1.U
+
+    val predictionCorrect =
+      (predictedTaken === actualTaken) &&
+        (!predictedTaken || (predictedTarget === actualTarget))
+
+    when(predictionCorrect) {
+      correctPredictions := correctPredictions + 1.U
+    }.otherwise {
+      mispredictions := mispredictions + 1.U
+    }
+  }
+ // when(totalBranches > 0.U && (correctPredictions + mispredictions === totalBranches)) {
+   // printf(p"[BRANCH_STATS] total=$totalBranches, correct=$correctPredictions, mispredicted=$mispredictions\n")
+
+//  }
+  when (io.resetStats) {
+    totalBranches := 0.U
+    correctPredictions := 0.U
+    mispredictions := 0.U
+  }
+  printf(p"[DEBUG] PC=0x${Hexadecimal(io.PC)}, opcode=0x${Hexadecimal(io.instruction.opcode)}, rs1=${io.instruction.registerRs1}, rs2=${io.instruction.registerRs2}\n")
+    printf(p"t0=${io.rs1}, t3=${io.rs2}\n")
+  when(totalBranches > 0.U && (correctPredictions + mispredictions === totalBranches)) {
+    printf(p"CSV_STATS,mode=${io.predictorMode},total=${totalBranches},correct=${correctPredictions},miss=${mispredictions}\n")
+    printf(p"CYCLE_STATS,mode=${io.predictorMode},cycles=${io.cycleCounter}\n")
+  }
+
+
 }

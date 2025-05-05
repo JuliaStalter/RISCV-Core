@@ -176,6 +176,7 @@ class SetupSignals extends Bundle {
 class TestReadouts extends Bundle {
   val registerRead = UInt(32.W)
   val DMEMread     = UInt(32.W)
+  val ecall = Output(Bool()) //to stop the testing of phts
 }
 
 object lookup {

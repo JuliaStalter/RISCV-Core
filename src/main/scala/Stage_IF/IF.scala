@@ -18,6 +18,8 @@ import config.Inst._
 import InstructionMemory.InstructionMemory
 
 import LPHT.BranchPredictor
+import GPHT.global_branch_predictor
+import hybrid.hybrid_predictor
 
 class IF(BinaryFile: String) extends Module {
 
@@ -47,6 +49,10 @@ class IF(BinaryFile: String) extends Module {
     val exBranchTaken = Input(Bool())
     val exBranchAddr = Input(UInt(32.W))
     val exUpdatePrediction = Input(Bool())
+    val predictorMode = Input(UInt(2.W)) // if use lpht, gpht, hybrid or none for testing
+    val cycleCounter = Output(UInt(32.W))
+    val correctPrediction = Output(Bool())
+
   })
 
   val InstructionMemory = Module(new InstructionMemory(BinaryFile))
@@ -58,7 +64,9 @@ class IF(BinaryFile: String) extends Module {
   val PCplus4 = Wire(UInt(32.W))
   val instruction = Wire(new Instruction)
   val branch = WireInit(Bool(), false.B)
-
+  val gpht = Module(new global_branch_predictor(historyLength = 3, tableSize = 1024))
+  val defaultNextPC = PC + 4.U
+  val hybrid = Module(new hybrid_predictor)
   InstructionMemory.testHarness.setupSignals := testHarness.InstructionMemorySetup
   testHarness.PC := InstructionMemory.testHarness.requestedAddress
 
@@ -84,34 +92,59 @@ class IF(BinaryFile: String) extends Module {
   BranchPredictor.io.branchTaken := io.branchTaken
   BranchPredictor.io.branchTarget := io.branchAddr
   BranchPredictor.io.update := io.updatePrediction
+  BranchPredictor.io.preloadEnable := false.B
+  BranchPredictor.io.preloadHistory := 0.U
 
-  // Stall PC
+  // GPHT signals
+
+  gpht.io.currentPC := PC
+  gpht.io.branchTaken := io.branchTaken
+  gpht.io.branchTarget := io.branchAddr
+  gpht.io.update := io.updatePrediction
+  gpht.io.shiftHistory := !io.stall
+  gpht.io.resetHistory := testHarness.InstructionMemorySetup.setup
+
+
+  // hybrid signals
+  hybrid.io.pc := PC
+  hybrid.io.branchTaken := io.branchTaken
+  hybrid.io.branchTarget := io.branchAddr
+  hybrid.io.update := io.updatePrediction
+  hybrid.io.shiftHistory := !io.stall
+  hybrid.io.resetHistory := testHarness.InstructionMemorySetup.setup
+
+
   when(io.stall) {
     PC := PC
-    // Fetch prev instruction -- Stalling the part of IF Barrier that holds the instruction
+
     InstructionMemory.io.instructionAddress := io.IFBarrierPC
   }.otherwise {
-    // Fetch instruction
+
     InstructionMemory.io.instructionAddress := PC
-    // PC register gets nextPC
+
     PC := nextPC
   }
-
-  // Mux for controlling which address to go to next
-  when(io.branchMispredicted) {  // Case of branch mispredicted, we realize that in EX stage
-    when(io.branchTaken) {  // Branch Behavior is Taken, but Predicted Not-Taken
-      nextPC := io.branchAddr
-    }
-      .otherwise {
-        nextPC := io.PCplus4ExStage
-      }
+  val cycleCounter = RegInit(0.U(32.W))
+  when(!io.stall) {
+    cycleCounter := cycleCounter + 1.U
   }
-    .elsewhen(BranchPredictor.io.prediction) {  // Use branch predictor
-      nextPC := BranchPredictor.io.nextPC
+  io.cycleCounter := cycleCounter
+
+  when(io.branchMispredicted) {
+    when(io.branchTaken) {
+      nextPC := io.branchAddr
+    }.otherwise {
+      nextPC := io.PCplus4ExStage
     }
-    .otherwise {  // Normal instruction OR assume not taken (BTB miss)
-      nextPC := PCplus4
-    }
+  }.elsewhen(io.predictorMode === 1.U && BranchPredictor.io.prediction) {
+    nextPC := BranchPredictor.io.nextPC
+  }.elsewhen(io.predictorMode === 2.U && gpht.io.validPrediction) {
+    nextPC := gpht.io.predictedNextPC
+  }.elsewhen(io.predictorMode === 3.U && hybrid.io.prediction) {
+    nextPC := hybrid.io.predictedTarget
+  }.otherwise {
+    nextPC := PCplus4
+  }
 
   // Send PC to the rest of the pipeline
   io.PC := PC
@@ -122,4 +155,32 @@ class IF(BinaryFile: String) extends Module {
     PC := 0.U
     instruction := Inst.NOP
   }
+
+  val predictionTaken = WireDefault(false.B)
+  val predictedTarget = WireDefault(defaultNextPC)
+
+
+  switch(io.predictorMode) {
+    is(1.U) { // Local predictor
+      predictionTaken := BranchPredictor.io.prediction
+      predictedTarget := BranchPredictor.io.nextPC
+      io.btbHit := BranchPredictor.io.prediction
+    }
+    is(2.U) { // Global predictor
+      predictionTaken := gpht.io.validPrediction
+      predictedTarget := gpht.io.predictedNextPC
+      io.btbHit := gpht.io.validPrediction
+    }
+    is(3.U) { // Hybrid
+      predictionTaken := hybrid.io.prediction
+      predictedTarget := hybrid.io.predictedTarget
+      io.btbHit := hybrid.io.prediction
+
+      BranchPredictor.io.preloadEnable := hybrid.io.preloadLocal
+      BranchPredictor.io.preloadHistory := hybrid.io.preloadHistory
+
+    }
+  }
+
+  io.correctPrediction := (predictedTarget === io.branchAddr && predictionTaken === io.branchTaken && io.updatePrediction)
 }

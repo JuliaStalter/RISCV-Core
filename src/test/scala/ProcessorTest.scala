@@ -44,8 +44,10 @@ class ProcessorTest_tb extends AnyFlatSpec with ChiselScalatestTester {
 
         val result = dut.io.DMEMReadData.peek().litValue
         println(f"Memory[$addr%08X] = $result")
-      }
 
+     //   val accuracy = if (total > 0) 100.0 * correct / total else 0.0
+      //  println(s"local predictor accuracy: $correct / $total = ${"%.2f".format(accuracy)}%")
+      }
     }
   }
 }

@@ -30,6 +30,9 @@ class top_MC(BinaryFile: String, DataFile: String) extends Module {
       val regUpdates   = Output(new RegisterUpdates)
       val memUpdates   = Output(new MemUpdates)
       val currentPC    = Output(UInt(32.W))
+      val predictorMode = Input(UInt(2.W)) //maybe outside ? first test :
+      val resetStats = Input(Bool())
+     val correctPrediction = Output(Bool())
     }
   )
 
@@ -61,6 +64,9 @@ class top_MC(BinaryFile: String, DataFile: String) extends Module {
   testHarness.regUpdates                := ID.testHarness.testUpdates
   testHarness.memUpdates                := MEM.testHarness.testUpdates
   testHarness.currentPC                 := IF.testHarness.PC
+  testHarness.testReadouts.ecall        := EX.io.ecall
+
+  testHarness.correctPrediction         := IF.io.correctPrediction
 
 
   // Fetch Stage
@@ -76,8 +82,9 @@ class top_MC(BinaryFile: String, DataFile: String) extends Module {
   IF.io.exBranchAddr       := 0.U
   IF.io.exUpdatePrediction := false.B
   IF.io.exBranchTaken := false.B
-
-  //Signals to IFBarrier
+  IF.io.predictorMode := testHarness.predictorMode
+  EX.io.cycleCounter := IF.io.cycleCounter
+ //Signals to IFBarrier
   IFBarrier.inCurrentPC        := IF.io.PC
   IFBarrier.inInstruction      := IF.io.instruction
   IFBarrier.stall              := HzdUnit.io.stall | HzdUnit.io.stall_membusy     // Stall Decode -> IFBarrier_en=0
@@ -126,6 +133,8 @@ class top_MC(BinaryFile: String, DataFile: String) extends Module {
   EX.io.ALUresultMEMB         := writeBackData
   EX.io.btbHit                := IDBarrier.outBTBHit
   EX.io.btbTargetPredict      := IDBarrier.outBTBTargetPredict
+ EX.io.predictorMode          := testHarness.predictorMode
+ EX.io.resetStats             := testHarness.resetStats
 
   // Hazard Unit
   HzdUnit.io.controlSignalsEXB  := EXBarrier.outControlSignals
