@@ -17,16 +17,18 @@ import chisel3.util._
 class Branch_OP extends Module {
   val io = IO(
     new Bundle {
-      val branchType  = Input(UInt(32.W))
+    val branchType  = Input(UInt(3.W))  //test from 32 to 3
       val src1        = Input(UInt(32.W))
       val src2        = Input(UInt(32.W))
+      val PC           = Input(UInt(32.W))
+      val immData      = Input(UInt(32.W))
       val branchTaken = Output(Bool())
       val branchTarget = Output(UInt(32.W))
     }
   )
 
   io.branchTaken := false.B
-  io.branchTarget := 0.U
+  io.branchTarget := io.PC + io.immData
 
   //Branch lookup
   val lhs = io.src1.asSInt

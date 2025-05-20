@@ -25,14 +25,17 @@ class top_MC(BinaryFile: String, DataFile: String) extends Module {
 
   val testHarness = IO(
     new Bundle {
-      val setupSignals = Input(new SetupSignals)
-      val testReadouts = Output(new TestReadouts)
-      val regUpdates   = Output(new RegisterUpdates)
-      val memUpdates   = Output(new MemUpdates)
-      val currentPC    = Output(UInt(32.W))
-      val predictorMode = Input(UInt(2.W)) //maybe outside ? first test :
-      val resetStats = Input(Bool())
-     val correctPrediction = Output(Bool())
+      val setupSignals       = Input(new SetupSignals)
+      val predictorMode      = Input(UInt(2.W)) //maybe outside ? first test :
+      val resetStats         = Input(Bool())
+
+      val testReadouts       = Output(new TestReadouts)
+      val regUpdates         = Output(new RegisterUpdates)
+      val memUpdates         = Output(new MemUpdates)
+      val currentPC          = Output(UInt(32.W))
+      val correctPrediction  = Output(Bool())
+      val updatePrediction   = Output(Bool())
+      val predictedTaken     = Output(Bool())
     }
   )
 
@@ -43,11 +46,19 @@ class top_MC(BinaryFile: String, DataFile: String) extends Module {
   val MEMBarrier = Module(new MEMpipe).io
 
  // Pipeline Stages
-  val IF  = Module(new IF(BinaryFile))
-  val ID  = Module(new ID)
-  val EX  = Module(new EX)
-  val MEM = Module(new MEM(DataFile))
+  val IF            = Module(new IF(BinaryFile))
+  val ID            = Module(new ID)
+  val EX            = Module(new EX)
+  val MEM           = Module(new MEM(DataFile))
   val writeBackData = Wire(UInt())
+
+ //delay test:
+ val delayedBranchMispredicted = RegNext(EX.io.wrongpredicted, false.B)
+ val delayedBranchAddr         = RegNext(EX.io.exBranchAddr)
+ val delayedBranchTaken        = RegNext(EX.io.exBranchTaken)
+ val delayedPCplus4            = RegNext(EX.io.outPCplus4)
+ val delayedUpdatePrediction   = RegNext(EX.io.exUpdatePrediction)
+
 
   // Hazard Unit
   val HzdUnit = Module(new HazardUnit)
@@ -67,31 +78,33 @@ class top_MC(BinaryFile: String, DataFile: String) extends Module {
   testHarness.testReadouts.ecall        := EX.io.ecall
 
   testHarness.correctPrediction         := IF.io.correctPrediction
-
+  testHarness.updatePrediction          := IF.io.updatePrediction
+  testHarness.predictedTaken            := IF.io.predictedTaken
 
   // Fetch Stage
-  IF.io.branchTaken        := EX.io.branchTaken
+  IF.io.branchTaken        := delayedBranchTaken
   IF.io.IFBarrierPC        := IFBarrier.outCurrentPC
   IF.io.stall              := HzdUnit.io.stall | HzdUnit.io.stall_membusy     // Stall Fetch -> PC_en=0
   IF.io.newBranch          := EX.io.newBranch
-  IF.io.updatePrediction   := EX.io.updatePrediction
+  IF.io.updatePrediction   := delayedUpdatePrediction
   IF.io.entryPC            := IDBarrier.outPC
   IF.io.branchAddr         := EX.io.branchTarget
-  IF.io.branchMispredicted := HzdUnit.io.branchMispredicted
-  IF.io.PCplus4ExStage     := EX.io.outPCplus4
+  IF.io.branchMispredicted := delayedBranchMispredicted
+  IF.io.PCplus4ExStage     := delayedPCplus4
   IF.io.exBranchAddr       := 0.U
   IF.io.exUpdatePrediction := false.B
-  IF.io.exBranchTaken := false.B
-  IF.io.predictorMode := testHarness.predictorMode
-  EX.io.cycleCounter := IF.io.cycleCounter
+  IF.io.exBranchTaken      := false.B
+  IF.io.predictorMode      := testHarness.predictorMode
+  EX.io.cycleCounter       := IF.io.cycleCounter
+  IF.io.actualTarget        := EX.io.branchTarget
  //Signals to IFBarrier
   IFBarrier.inCurrentPC        := IF.io.PC
   IFBarrier.inInstruction      := IF.io.instruction
   IFBarrier.stall              := HzdUnit.io.stall | HzdUnit.io.stall_membusy     // Stall Decode -> IFBarrier_en=0
   IFBarrier.flush              := HzdUnit.io.flushD
-  IFBarrier.inBTBHit           := IF.io.btbHit
-  IFBarrier.inBTBPrediction    := IF.io.btbPrediction
-  IFBarrier.inBTBTargetPredict := IF.io.btbTargetPredict
+  IFBarrier.inBTBHit           := true.B
+  IFBarrier.inBTBPrediction    := IF.io.predictedTaken
+  IFBarrier.inBTBTargetPredict := IF.io.nextPC
 
   //Decode stage
   ID.io.instruction           := IFBarrier.outInstruction
@@ -112,7 +125,7 @@ class top_MC(BinaryFile: String, DataFile: String) extends Module {
   IDBarrier.inALUop            := ID.io.ALUop
   IDBarrier.inReadData1        := ID.io.readData1
   IDBarrier.inReadData2        := ID.io.readData2
-  IDBarrier.inBTBHit           := IFBarrier.outBTBHit
+  IDBarrier.inBTBHit           := true.B
   IDBarrier.inBTBPrediction    := IFBarrier.outBTBPrediction
   IDBarrier.inBTBTargetPredict := IFBarrier.outBTBTargetPredict
 
@@ -131,10 +144,13 @@ class top_MC(BinaryFile: String, DataFile: String) extends Module {
   EX.io.ALUop                 := IDBarrier.outALUop
   EX.io.ALUresultEXB          := EXBarrier.outALUResult
   EX.io.ALUresultMEMB         := writeBackData
-  EX.io.btbHit                := IDBarrier.outBTBHit
-  EX.io.btbTargetPredict      := IDBarrier.outBTBTargetPredict
+  EX.io.btbHit                := true.B
+
  EX.io.predictorMode          := testHarness.predictorMode
  EX.io.resetStats             := testHarness.resetStats
+ EX.io.nextPC                 := IF.io.nextPC
+ EX.io.predictedTarget        := IF.io.nextPC
+ EX.io.predictedTaken         := IF.io.predictedTaken
 
   // Hazard Unit
   HzdUnit.io.controlSignalsEXB  := EXBarrier.outControlSignals

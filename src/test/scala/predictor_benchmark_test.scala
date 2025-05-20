@@ -139,8 +139,6 @@ class PredictorBenchmarkTest extends AnyFlatSpec with ChiselScalatestTester {
               local.io.branchTaken.poke(true.B)
               local.io.branchTarget.poke(loopTarget)
               local.io.update.poke(true.B)
-              local.io.preloadEnable.poke(false.B)
-              local.io.preloadHistory.poke("b11".U)
               val predicted = local.io.nextPC.peek().litValue
               val correctPrediction = predicted == loopTarget.litValue
               val valid = true
@@ -213,8 +211,6 @@ class PredictorBenchmarkTest extends AnyFlatSpec with ChiselScalatestTester {
                 local.io.branchTaken.poke(taken)
                 local.io.branchTarget.poke(target)
                 local.io.update.poke(true.B)
-                local.io.preloadEnable.poke(false.B)
-                local.io.preloadHistory.poke("b11".U)
                 val predicted = local.io.nextPC.peek().litValue
                 val correctPrediction = predicted == target.litValue
                 val valid = true

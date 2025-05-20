@@ -9,84 +9,94 @@ Student Workers: Giorgi Solomnishvili, Zahra Jenab Mahabadi, Tsotne Karchava, Ab
 
 */
 
-package RISCV_TOP
-import chisel3._
-import chisel3.util._
-import top_MC.top_MC
+      package RISCV_TOP
+      import chisel3._
+      import chisel3.util._
+      import top_MC.top_MC
 
 
-class RISCV_TOP(BinaryFile: String = "src/test/programs/beq_test", DataFile: String = "src/main/scala/DataMemory/dataMemVals") extends Module{
+      class RISCV_TOP(BinaryFile: String = "src/test/programs/beq_test", DataFile: String = "src/main/scala/DataMemory/dataMemVals") extends Module {
 
-  val io = IO(
-    new Bundle {
+        val io = IO(
+          new Bundle {
 
-      val PC                     = Output(UInt())
-      val setup                  = Input(Bool())
+            val setup                  = Input(Bool())
 
-      val IMEMWriteData          = Input(UInt(32.W))
-      val IMEMAddr               = Input(UInt(32.W))
+            val IMEMWriteData          = Input(UInt(32.W))
+            val IMEMAddr               = Input(UInt(32.W))
 
-      val DMEMWriteData          = Input(UInt(32.W))
-      val DMEMAddr               = Input(UInt(32.W))
-      val DMEMWriteEnable        = Input(Bool())
-      val DMEMReadData           = Output(UInt(32.W))
-      val DMEMReadEnable         = Input(Bool())
+            val DMEMWriteData          = Input(UInt(32.W))
+            val DMEMAddr               = Input(UInt(32.W))
+            val DMEMWriteEnable        = Input(Bool())
+            val DMEMReadEnable         = Input(Bool())
 
-      val regsWriteData          = Input(UInt(32.W))
-      val regsAddr               = Input(UInt(5.W))
-      val regsWriteEnable        = Input(Bool())
-      val regsReadData           = Output(UInt(32.W))
+            val regsWriteData          = Input(UInt(32.W))
+            val regsAddr               = Input(UInt(5.W))
+            val regsWriteEnable        = Input(Bool())
 
-      val regsDeviceWriteEnable  = Output(Bool())
-      val regsDeviceWriteData    = Output(UInt(32.W))
-      val regsDeviceWriteAddress    = Output(UInt(5.W))
-
-      val memDeviceWriteEnable   = Output(Bool())
-      val memDeviceWriteData     = Output(UInt(32.W))
-      val memDeviceWriteAddress     = Output(UInt(32.W))
-      val ecall = Output(Bool())
-      val correctPrediction = Output(Bool())
+            //for choosing witch predictor to use: 0 : none, 1: lpht, 2: gpht, 3:hybrid
+            val predictorMode          = Input(UInt(2.W))
+            val resetStats             = Input(Bool())
 
 
-      //for choosing witch predictor to use: 0 : none, 1: lpht, 2: gpht, 3:hybrid
+            val PC                     = Output(UInt())
 
-      val predictorMode       = Input(UInt(2.W))
-      val resetStats = Input(Bool())
-    })
+            val DMEMReadData           = Output(UInt(32.W))
 
-  val top_MC = Module(new top_MC(BinaryFile, DataFile)).testHarness
+            val regsReadData           = Output(UInt(32.W))
+            val regsDeviceWriteEnable  = Output(Bool())
+            val regsDeviceWriteData    = Output(UInt(32.W))
+            val regsDeviceWriteAddress = Output(UInt(5.W))
 
-  io.PC := top_MC.currentPC
+            val memDeviceWriteEnable   = Output(Bool())
+            val memDeviceWriteData     = Output(UInt(32.W))
+            val memDeviceWriteAddress  = Output(UInt(32.W))
 
-  top_MC.setupSignals.IMEMsignals.address     := io.IMEMAddr
-  top_MC.setupSignals.IMEMsignals.instruction := io.IMEMWriteData
-  top_MC.setupSignals.IMEMsignals.setup       := io.setup
+            val ecall                  = Output(Bool())
+            val correctPrediction      = Output(Bool())
+            val updatePrediction       = Output(Bool())
+            val predictedTaken         = Output(Bool())
 
-  top_MC.setupSignals.DMEMsignals.writeEnable := io.DMEMWriteEnable
-  top_MC.setupSignals.DMEMsignals.readEnable  := io.DMEMReadEnable
-  top_MC.setupSignals.DMEMsignals.dataAddress := io.DMEMAddr
-  top_MC.setupSignals.DMEMsignals.dataIn      := io.DMEMWriteData
-  top_MC.setupSignals.DMEMsignals.setup       := io.setup
+          })
 
-  top_MC.setupSignals.registerSignals.readAddress  := io.regsAddr
-  top_MC.setupSignals.registerSignals.writeEnable  := io.regsWriteEnable
-  top_MC.setupSignals.registerSignals.writeAddress := io.regsAddr
-  top_MC.setupSignals.registerSignals.writeData    := io.regsWriteData
-  top_MC.setupSignals.registerSignals.setup        := io.setup
+        val top_MC = Module(new top_MC(BinaryFile, DataFile)).testHarness
 
-  top_MC.predictorMode := io.predictorMode // for predictor mode set
-  top_MC.resetStats := io.resetStats
-  io.DMEMReadData := top_MC.testReadouts.DMEMread
-  io.regsReadData := top_MC.testReadouts.registerRead
+        io.PC := top_MC.currentPC
 
-  io.regsDeviceWriteAddress := top_MC.regUpdates.writeAddress
-  io.regsDeviceWriteEnable  := top_MC.regUpdates.writeEnable
-  io.regsDeviceWriteData    := top_MC.regUpdates.writeData
+        top_MC.setupSignals.IMEMsignals.address     := io.IMEMAddr
+        top_MC.setupSignals.IMEMsignals.instruction := io.IMEMWriteData
+        top_MC.setupSignals.IMEMsignals.setup       := io.setup
 
-  io.memDeviceWriteAddress  := top_MC.memUpdates.writeAddress
-  io.memDeviceWriteEnable   := top_MC.memUpdates.writeEnable
-  io.memDeviceWriteData     := top_MC.memUpdates.writeData
-  io.ecall := top_MC.testReadouts.ecall
-  io.correctPrediction := top_MC.correctPrediction
-}
+        top_MC.setupSignals.DMEMsignals.writeEnable := io.DMEMWriteEnable
+        top_MC.setupSignals.DMEMsignals.readEnable  := io.DMEMReadEnable
+        top_MC.setupSignals.DMEMsignals.dataAddress := io.DMEMAddr
+        top_MC.setupSignals.DMEMsignals.dataIn      := io.DMEMWriteData
+        top_MC.setupSignals.DMEMsignals.setup       := io.setup
+
+        top_MC.setupSignals.registerSignals.readAddress  := io.regsAddr
+        top_MC.setupSignals.registerSignals.writeEnable  := io.regsWriteEnable
+        top_MC.setupSignals.registerSignals.writeAddress := io.regsAddr
+        top_MC.setupSignals.registerSignals.writeData    := io.regsWriteData
+        top_MC.setupSignals.registerSignals.setup        := io.setup
+
+        top_MC.predictorMode    := io.predictorMode // for predictor mode set
+        top_MC.resetStats       := io.resetStats
+        io.DMEMReadData         := top_MC.testReadouts.DMEMread
+
+        io.regsReadData         := top_MC.testReadouts.registerRead
+
+        io.regsDeviceWriteAddress := top_MC.regUpdates.writeAddress
+        io.regsDeviceWriteEnable  := top_MC.regUpdates.writeEnable
+        io.regsDeviceWriteData    := top_MC.regUpdates.writeData
+
+        io.memDeviceWriteAddress := top_MC.memUpdates.writeAddress
+        io.memDeviceWriteEnable  := top_MC.memUpdates.writeEnable
+        io.memDeviceWriteData    := top_MC.memUpdates.writeData
+
+        io.ecall              := top_MC.testReadouts.ecall
+        io.correctPrediction  := top_MC.correctPrediction
+        io.predictedTaken     := top_MC.predictedTaken
+        io.updatePrediction   := top_MC.updatePrediction
+      }
+
 
