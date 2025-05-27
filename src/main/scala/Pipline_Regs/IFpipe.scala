@@ -23,11 +23,17 @@ class IFpipe extends Module
       val stall               = Input(Bool())
       val flush               = Input(Bool())
       val inBTBHit            = Input(Bool())
+      val inpredictorHit           = Input(Bool())
       val inBTBPrediction     = Input(Bool())
       val inBTBTargetPredict  = Input(UInt(32.W))
+      val inpredictorpredictedTarget = Input(UInt(32.W))
+      val inpredictorPrediction    = Input(Bool())
       val outBTBHit           = Output(Bool())
+      val outpredictorHit          = Output(Bool())
       val outBTBPrediction    = Output(Bool())
+      val outpredictorPrediction   = Output(Bool())
       val outBTBTargetPredict = Output(UInt(32.W))
+      val outpredictorpredictedTarget = Output(UInt(32.W))
       val outCurrentPC        = Output(UInt(32.W))
       val outInstruction      = Output(new Instruction)
     }
@@ -43,13 +49,27 @@ class IFpipe extends Module
   val btbPredictionReg = RegInit(false.B)
   val btbTargetPredict = RegInit(0.U(32.W))
 
+  val predictorHitReg        = RegInit(false.B)
+  val predictorPredictionReg = RegInit(false.B)
+  val predictorpredictedTarget = RegInit(0.U(32.W))
+
   btbHitReg        := io.inBTBHit
   btbPredictionReg := io.inBTBPrediction
   btbTargetPredict := io.inBTBTargetPredict
 
+  predictorHitReg := io.inpredictorHit
+  predictorPredictionReg := io.inpredictorPrediction
+  predictorpredictedTarget := io.inpredictorpredictedTarget
+
+
   io.outBTBHit           := btbHitReg
   io.outBTBPrediction    := btbPredictionReg
   io.outBTBTargetPredict := btbTargetPredict
+
+  io.outpredictorPrediction := predictorPredictionReg
+  io.outpredictorHit           := predictorHitReg
+  io.outpredictorpredictedTarget := predictorpredictedTarget
+
 
   // Flush, Stall, or Propagate Instruction
   when(flushDelayed === 1.U){

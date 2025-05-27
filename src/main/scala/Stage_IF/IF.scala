@@ -16,6 +16,9 @@ import chisel3.util._
 import config.{ControlSignals, IMEMsetupSignals, Inst, Instruction}
 import config.Inst._
 import InstructionMemory.InstructionMemory
+import prediction.lpht
+import prediction.gpht
+import prediction.hybrid
 
 class IF(BinaryFile: String) extends Module
 {
@@ -32,28 +35,36 @@ class IF(BinaryFile: String) extends Module
     val branchAddr         = Input(UInt())
     val IFBarrierPC        = Input(UInt())
     val stall              = Input(Bool())
+    val predictionMode      = Input(UInt(3.W))
+
     // Inputs for BTB, will come from EX stage and Hazard Unit
     val updatePrediction   = Input(Bool())
     val newBranch          = Input(Bool())
     val entryPC            = Input(UInt(32.W))
     val branchTaken        = Input(Bool())  // 1 means Taken -- 0 means Not Taken
     val branchMispredicted = Input(Bool())
+    val shiftHistory       = Input(Bool())
     val PCplus4ExStage     = Input(UInt(32.W))
     val btbHit             = Output(Bool())
+    val predictorHit            = Output(Bool())
     val btbPrediction      = Output(Bool())
+    val predictorPrediction     = Output(Bool())
+    val predictorpredictedTarget = Output(UInt(32.W))
     val btbTargetPredict   = Output(UInt(32.W))
     val PC                 = Output(UInt())
     val instruction        = Output(new Instruction)
   })
 
   val InstructionMemory = Module(new InstructionMemory(BinaryFile))
-  val BTB               = Module(new BTB_direct)
+  val BTB               = Module(new BTB_2way) // changed to work in parallel with the lpht first
   val nextPC            = WireInit(UInt(), 0.U)
   val PC                = RegInit(UInt(32.W), 0.U)
   val PCplus4           = Wire(UInt(32.W))
   val instruction       = Wire(new Instruction)
   val branch            = WireInit(Bool(), false.B)
-
+  val lpht              = Module(new lpht)
+  val gpht              = Module(new gpht(3,1024))
+  val hybrid            = Module(new hybrid)
 
   InstructionMemory.testHarness.setupSignals := testHarness.InstructionMemorySetup
   testHarness.PC := InstructionMemory.testHarness.requestedAddress
@@ -75,6 +86,85 @@ class IF(BinaryFile: String) extends Module
   io.btbHit := BTB.io.btbHit
   io.btbTargetPredict := BTB.io.targetAdr
 
+  //lpht signals
+
+  lpht.io.pc := PC
+  lpht.io.branchTaken := io.branchTaken
+  lpht.io.update := io.updatePrediction
+  lpht.io.branchTarget := io.branchAddr
+  lpht.io.preloadEnable := false.B
+  lpht.io.entryTarget := io.branchAddr
+  lpht.io.entryPC := io.entryPC
+
+  //gpht signals
+  gpht.io.pc  := PC
+  gpht.io.branchTaken := io.branchTaken
+  gpht.io.branchTarget := io.branchAddr
+  gpht.io.update := io.updatePrediction
+  gpht.io.shiftHistory := io.shiftHistory
+  gpht.io.resetHistory := false.B
+
+//hybrid
+
+  hybrid.io.pc := PC
+  hybrid.io.branchTaken := io.branchTaken
+  hybrid.io.branchTarget := io.branchAddr
+  hybrid.io.update := io.updatePrediction
+  hybrid.io.shiftHistory := io.shiftHistory
+  hybrid.io.resetHistory := false.B
+  hybrid.io.mispredicted := io.branchMispredicted
+  hybrid.io.actualTarget := Mux(io.branchTaken, io.branchAddr, io.PCplus4ExStage)
+
+
+  //default values before predictionMode is set
+  io.predictorPrediction     := false.B
+  io.predictorHit            := false.B
+  io.predictorpredictedTarget := 0.U
+
+
+  switch(io.predictionMode) {
+
+    is(0.U) { // No predictor
+     io.predictorPrediction               := false.B
+      lpht.io.update                      := false.B
+      gpht.io.update                      := false.B
+      hybrid.io.update                    := false.B
+      BTB.io.updatePrediction             := false.B
+      io.predictorpredictedTarget         := PC + 4.U
+      io.predictorHit                     := false.B
+    }
+    is(1.U) { //lpht
+      io.predictorPrediction              := lpht.io.prediction
+      io.predictorpredictedTarget         := lpht.io.lphtpredictedTarget
+      io.predictorHit                     := lpht.io.lphtHit
+
+      gpht.io.update                      := false.B
+      hybrid.io.update                    := false.B
+      BTB.io.updatePrediction             := false.B
+    }
+
+  is(2.U) { //gpht
+      io.predictorPrediction              := gpht.io.gphtPrediction
+      io.predictorpredictedTarget         := gpht.io.gphtpredictedTarget
+      io.predictorHit                     := gpht.io.gphtHit
+
+      lpht.io.update                      := false.B
+      hybrid.io.update                    := false.B
+      BTB.io.updatePrediction             := false.B
+    }
+
+    is(3.U) { //hybrid
+
+      io.predictorPrediction              := hybrid.io.hybridPrediction
+      io.predictorpredictedTarget         := hybrid.io.hybridpredictedTarget
+      io.predictorHit                     := hybrid.io.hybridHit
+
+      BTB.io.updatePrediction             := false.B
+   }
+  }
+
+
+
   // Stall PC
   when(io.stall){
     PC := PC
@@ -87,6 +177,13 @@ class IF(BinaryFile: String) extends Module
     // PC register gets nextPC
     PC := nextPC
   }
+
+  val predictedTaken = io.predictorHit && io.predictorPrediction
+  val predictedTargetValid = io.predictorpredictedTarget =/= 0.U
+  val usePrediction = predictedTaken && predictedTargetValid
+
+
+
   //Mux for controlling which address to go to next
   when(io.branchMispredicted){  // Case of branch mispredicted, we realize that in EX stage
     when(io.branchTaken){  // Branch Behavior is Taken, but Predicted Not-Taken
@@ -96,19 +193,14 @@ class IF(BinaryFile: String) extends Module
       nextPC := io.PCplus4ExStage
     }
   }
-  .elsewhen(BTB.io.btbHit){  // BTB hits -> Choose nextPC as per the prediction
-    when(BTB.io.prediction){  // Predict taken
-      nextPC := BTB.io.targetAdr
-    }
-    .otherwise{ // Predict not taken
-      nextPC := PCplus4
-    }
+  .elsewhen(usePrediction){
+    nextPC := io.predictorpredictedTarget
   }
   .otherwise{ // Normal instruction OR assume not taken (BTB miss)
     nextPC := PCplus4
   }
   
-  // Send PC to the rest of the pipeline
+  // Send PC to the res.entryPC <= VOIDt of the pipeline
   io.PC := PC
 
   io.instruction := instruction
@@ -116,5 +208,10 @@ class IF(BinaryFile: String) extends Module
   when(testHarness.InstructionMemorySetup.setup) {
     PC := 0.U
     instruction := Inst.NOP
+    gpht.io.resetHistory := true.B
+    hybrid.io.resetHistory := true.B
+  }.otherwise {
+    gpht.io.resetHistory := false.B
+    hybrid.io.resetHistory := false.B
   }
 }

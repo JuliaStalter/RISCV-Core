@@ -58,6 +58,15 @@ class IDpipe extends Module
       val outBTBPrediction    = Output(Bool())
       val outBTBTargetPredict = Output(UInt(32.W))
 
+
+      //predictor related
+      val inpredictorHit       = Input(Bool())
+      val inpredictorPrediction = Input(Bool())
+      val inpredictorpredictedTarget = Input(UInt(32.W))
+      val outpredictorHit    = Output(Bool())
+      val outpredictorPrediction = Output(Bool())
+      val outpredictorpredictedTarget = Output(UInt(32.W))
+
       //Output from register - registers signals
       val outReadData1      = Output(UInt(32.W))
       val outReadData2      = Output(UInt(32.W))
@@ -82,6 +91,12 @@ class IDpipe extends Module
   val btbPredictionReg = RegInit(false.B)
   val btbTargetPredict = RegInit(0.U(32.W))
 
+  //predictor signals
+  val predictorHitReg        = RegInit(false.B)
+  val predictorPredictionReg = RegInit(false.B)
+  val predictorpredictedTarget = RegInit(0.U(32.W))
+
+
   //Flush
   when(io.flush === 1.U){
     instructionReg    := Inst.NOP
@@ -95,9 +110,17 @@ class IDpipe extends Module
   btbPredictionReg := io.inBTBPrediction
   btbTargetPredict := io.inBTBTargetPredict
 
+  predictorHitReg        := io.inpredictorHit
+  predictorPredictionReg := io.inpredictorPrediction
+  predictorpredictedTarget := io.inpredictorpredictedTarget
+
   io.outBTBHit           := btbHitReg
   io.outBTBPrediction    := btbPredictionReg
   io.outBTBTargetPredict := btbTargetPredict
+
+  io.outpredictorHit        := predictorHitReg
+  io.outpredictorPrediction := predictorPredictionReg
+  io.outpredictorpredictedTarget := predictorpredictedTarget
 
   io.outInstruction    := instructionReg
   io.outControlSignals := controlSignalsReg

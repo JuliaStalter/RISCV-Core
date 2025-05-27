@@ -44,9 +44,7 @@ class RISCV_TOP(BinaryFile: String = "src/test/programs/beq_test", DataFile: Str
       val memDeviceWriteEnable   = Output(Bool())
       val memDeviceWriteData     = Output(UInt(32.W))
       val memDeviceWriteAddress     = Output(UInt(32.W))
-
-
-
+      val predictionMode = Input(UInt(2.W))
 
     })
 
@@ -69,6 +67,7 @@ class RISCV_TOP(BinaryFile: String = "src/test/programs/beq_test", DataFile: Str
   top_MC.setupSignals.registerSignals.writeAddress := io.regsAddr
   top_MC.setupSignals.registerSignals.writeData    := io.regsWriteData
   top_MC.setupSignals.registerSignals.setup        := io.setup
+  top_MC.predictionMode := io.predictionMode
 
   io.DMEMReadData := top_MC.testReadouts.DMEMread
   io.regsReadData := top_MC.testReadouts.registerRead

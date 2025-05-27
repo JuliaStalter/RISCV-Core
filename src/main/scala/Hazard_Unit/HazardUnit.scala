@@ -30,6 +30,7 @@ class HazardUnit extends Module
         val rdAddrMEMB          = Input(UInt(32.W))
         val branchTaken         = Input(Bool())
         val btbPrediction       = Input(Bool())
+        val predictorPrediction      = Input(Bool()) // should be used instead of btbPrediction to  use the lpht
         val wrongAddrPred       = Input(Bool())
         val membusy             = Input(Bool())
         val branchMispredicted  = Output(Bool())
@@ -88,7 +89,7 @@ class HazardUnit extends Module
 
   io.stall    := stall
 
-  when((io.branchTaken =/= io.btbPrediction &&  io.branchType =/= branch_types.DC) || io.wrongAddrPred){
+  when((io.branchTaken =/= io.predictorPrediction &&  io.branchType =/= branch_types.DC) || io.wrongAddrPred){
     io.branchMispredicted := 1.B
   }
   .otherwise{

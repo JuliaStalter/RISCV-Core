@@ -40,7 +40,10 @@ class EX extends Module {
       val ALUresultEXB       = Input(UInt(32.W))
       val ALUresultMEMB      = Input(UInt(32.W))
       val btbHit             = Input(Bool())
+      val predictorHit            = Input (Bool())
       val btbTargetPredict   = Input(UInt(32.W))
+      val predictorpredictedTarget = Input(UInt(32.W))
+      val predictionMode     = Input(UInt(2.W))
       val newBranch          = Output(Bool())
       val updatePrediction   = Output(Bool())
       val outPCplus4         = Output(UInt(32.W))
@@ -49,6 +52,7 @@ class EX extends Module {
       val branchTaken        = Output(Bool())
       val wrongAddrPred      = Output(Bool())
       val Rs2Forwarded       = Output(UInt(32.W))
+      val shiftHistory       = Output(Bool())
     }
   )
 
@@ -117,7 +121,7 @@ class EX extends Module {
 
   // EX stage outputs
   io.branchTaken   := ResolveBranch.branchTaken // Branch taken or not in sequential program flow?
-  io.wrongAddrPred := io.btbHit && (ALU.aluRes =/= io.btbTargetPredict) // hit but target addr in BTB was incorrect
+  io.wrongAddrPred := io.predictorHit && (ALU.aluRes =/= io.predictorpredictedTarget) // hit but target addr in BTB was incorrect
   io.branchTarget  := ALU.aluRes  // calculated branch target
   
 
@@ -132,18 +136,29 @@ class EX extends Module {
     io.ALUResult := Mux(mdu_op_flag, MDU.MDURes, ALU.aluRes) //MUX to choose the value either from ALU or MDU
   }
 
-  // BTB-related: Finding new Branch Instructions and Updating Existing Prediction
-  when(io.branchType =/= branch_types.DC){ // In case instruction is a valid branch (valid means not flushed)
-    when(!io.btbHit || (io.btbHit && (ALU.aluRes =/= io.btbTargetPredict))){ // In case of BTB miss, or BTB hit, but wrong target address (may occur only for JALR) send this as new BTB entry to IF stage
-      io.newBranch        := true.B  // Update BTB! -> Tells IF to take io.branchTarget as entryBrTarget AND take IDBarrier.io.outPC as entryPC
-      io.updatePrediction := false.B
-    }otherwise{ // In case of BTB hit (we already know this branch), tell IF to change prediction FSM
-      io.newBranch        := false.B
+  val usingPrediction = io.predictionMode =/= 0.U
+
+  val predictionCorrect = io.predictorHit && (ALU.aluRes === io.predictorpredictedTarget)
+
+  when(usingPrediction) {
+
+    when(io.branchType =/= branch_types.DC) {
+
+      io.shiftHistory := true.B
       io.updatePrediction := true.B
+
+      io.newBranch := !io.predictorHit || !predictionCorrect
+
+    }.otherwise {
+      io.shiftHistory := false.B
+      io.updatePrediction := false.B
+      io.newBranch := false.B
     }
-  }.otherwise{
-    io.newBranch        := false.B
-    io.updatePrediction := false.B
+  }.otherwise {
+      io.shiftHistory := false.B
+      io.updatePrediction := false.B
+      io.newBranch := false.B
   }
   io.outPCplus4 := PCplus4
+
 }
