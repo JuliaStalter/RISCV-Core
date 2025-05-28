@@ -16,7 +16,9 @@ import chisel3.util._
 import config.{ControlSignals, IMEMsetupSignals, Inst, Instruction}
 import config.Inst._
 import InstructionMemory.InstructionMemory
-
+import prediction.lpht
+import prediction.gpht
+import prediction.hybrid
 class IF(BinaryFile: String) extends Module
 {
 
@@ -32,6 +34,8 @@ class IF(BinaryFile: String) extends Module
     val branchAddr         = Input(UInt())
     val IFBarrierPC        = Input(UInt())
     val stall              = Input(Bool())
+    val predictionMode     = Input(UInt(2.W))
+    val shiftHistory       = Input(Bool())
     // Inputs for BTB, will come from EX stage and Hazard Unit
     val updatePrediction   = Input(Bool())
     val newBranch          = Input(Bool())
@@ -40,8 +44,11 @@ class IF(BinaryFile: String) extends Module
     val branchMispredicted = Input(Bool())
     val PCplus4ExStage     = Input(UInt(32.W))
     val btbHit             = Output(Bool())
+    val predictorHit         = Output(Bool())
     val btbPrediction      = Output(Bool())
+    val predictorPrediction = Output(Bool())
     val btbTargetPredict   = Output(UInt(32.W))
+    val predictorpredictedTarget = Output(UInt(32.W))
     val PC                 = Output(UInt())
     val instruction        = Output(new Instruction)
   })
@@ -53,7 +60,9 @@ class IF(BinaryFile: String) extends Module
   val PCplus4           = Wire(UInt(32.W))
   val instruction       = Wire(new Instruction)
   val branch            = WireInit(Bool(), false.B)
-
+  val lpht             = Module(new lpht)
+  val gpht              = Module (new gpht)
+  val hybrid            = Module (new hybrid)
 
   InstructionMemory.testHarness.setupSignals := testHarness.InstructionMemorySetup
   testHarness.PC := InstructionMemory.testHarness.requestedAddress
@@ -74,6 +83,86 @@ class IF(BinaryFile: String) extends Module
   io.btbPrediction := BTB.io.prediction
   io.btbHit := BTB.io.btbHit
   io.btbTargetPredict := BTB.io.targetAdr
+
+  //lpht signals
+
+  lpht.io.pc := PC
+  lpht.io.branchTaken := io.branchBehavior
+  lpht.io.update := io.updatePrediction
+  lpht.io.branchTarget := io.branchAddr
+  lpht.io.preloadEnable := false.B
+  lpht.io.entryTarget := io.branchAddr
+  lpht.io.entryPC := io.entryPC
+
+  //gpht signals
+  gpht.io.pc  := PC
+  gpht.io.branchTaken := io.branchBehavior
+  gpht.io.branchTarget := io.branchAddr
+  gpht.io.update := io.updatePrediction
+  gpht.io.shiftHistory := io.shiftHistory
+  gpht.io.resetHistory := false.B
+
+  //hybrid
+
+  hybrid.io.pc := PC
+  hybrid.io.branchTaken := io.branchBehavior
+  hybrid.io.branchTarget := io.branchAddr
+  hybrid.io.update := io.updatePrediction
+  hybrid.io.shiftHistory := io.shiftHistory
+  hybrid.io.resetHistory := false.B
+  hybrid.io.mispredicted := io.branchMispredicted
+  hybrid.io.actualTarget := Mux(io.branchBehavior, io.branchAddr, io.PCplus4ExStage)
+
+
+  //default values before predictionMode is set
+  io.predictorPrediction     := false.B
+  io.predictorHit            := false.B
+  io.predictorpredictedTarget := 0.U
+
+
+  switch(io.predictionMode) {
+
+    is(0.U) { // No predictor
+      io.predictorPrediction               := false.B
+      lpht.io.update                      := false.B
+      gpht.io.update                      := false.B
+      hybrid.io.update                    := false.B
+      BTB.io.updatePrediction             := false.B
+      io.predictorpredictedTarget         := PC + 4.U
+      io.predictorHit                     := false.B
+    }
+    is(1.U) { //lpht
+      io.predictorPrediction              := lpht.io.prediction
+      io.predictorpredictedTarget         := lpht.io.lphtpredictedTarget
+      io.predictorHit                     := lpht.io.lphtHit
+
+      gpht.io.update                      := false.B
+      hybrid.io.update                    := false.B
+      BTB.io.updatePrediction             := false.B
+    }
+
+    is(2.U) { //gpht
+      io.predictorPrediction              := gpht.io.gphtPrediction
+      io.predictorpredictedTarget         := gpht.io.gphtpredictedTarget
+      io.predictorHit                     := gpht.io.gphtHit
+
+      lpht.io.update                      := false.B
+      hybrid.io.update                    := false.B
+      BTB.io.updatePrediction             := false.B
+    }
+
+    is(3.U) { //hybrid
+
+      io.predictorPrediction              := hybrid.io.hybridPrediction
+      io.predictorpredictedTarget         := hybrid.io.hybridpredictedTarget
+      io.predictorHit                     := hybrid.io.hybridHit
+
+      BTB.io.updatePrediction             := false.B
+    }
+  }
+
+
+
 
   // Stall PC
   when(io.stall){

@@ -29,7 +29,8 @@ class HazardUnit extends Module
         val rdAddrEXB           = Input(UInt())
         val rdAddrMEMB          = Input(UInt())
         val branchTaken         = Input(Bool())
-        val btbPrediction       = Input(Bool())
+        //val btbPrediction       = Input(Bool())
+        val predictorPrediction    = Input(Bool())
         val branchMispredicted  = Output(Bool())
         val stall               = Output(Bool())
         val flushE              = Output(Bool())
@@ -78,7 +79,7 @@ class HazardUnit extends Module
 
 // Outputs: Data Hazard -> stall ID & IF stages, and Flush EX stage (Load) ___ Control Hazard -> flush ID & EX stages (Branch Taken)
   io.stall    := stall
-  when((io.branchTaken =/= io.btbPrediction &&  io.branchType =/= branch_types.DC)){ // *NOTE*: If io.branchType = DC, this means the branch/jump instruction currently in EX is invalid (flushed!) --> correcting misprediction is invalid too!
+  when((io.branchTaken =/= io.predictorPrediction &&  io.branchType =/= branch_types.DC)){ // *NOTE*: If io.branchType = DC, this means the branch/jump instruction currently in EX is invalid (flushed!) --> correcting misprediction is invalid too!
     io.branchMispredicted := 1.B
   }
   .otherwise{

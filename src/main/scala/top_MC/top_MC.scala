@@ -69,6 +69,7 @@ class top_MC(BinaryFile: String) extends Module {
   IF.io.stall              := HzdUnit.io.stall             // Stall Fetch -> PC_en=0
   IF.io.newBranch          := EX.io.newBranch
   IF.io.updatePrediction   := EX.io.updatePrediction
+  IF.io.shiftHistory        := EX.io.shiftHistory
   IF.io.entryPC            := IDBarrier.outPC
   IF.io.branchAddr         := EX.io.branchTarget
   IF.io.branchMispredicted := HzdUnit.io.branchMispredicted
@@ -79,9 +80,9 @@ class top_MC(BinaryFile: String) extends Module {
   IFBarrier.inInstruction      := IF.io.instruction
   IFBarrier.stall              := HzdUnit.io.stall             // Stall Decode -> IFBarrier_en=0
   IFBarrier.flush              := HzdUnit.io.flushD
-  IFBarrier.inBTBHit           := IF.io.btbHit
-  IFBarrier.inBTBPrediction    := IF.io.btbPrediction
-  IFBarrier.inBTBTargetPredict := IF.io.btbTargetPredict
+  IFBarrier.inpredictorHit          := IF.io.predictorHit   // von btb auf prediction für lpht gpht und hybrid
+  IFBarrier.inpredictorPrediction    := IF.io.predictorPrediction
+  IFBarrier.inpredictorpredictedTarget := IF.io.predictorpredictedTarget
 
   //Decode stage
   ID.io.instruction           := IFBarrier.outInstruction
@@ -101,9 +102,9 @@ class top_MC(BinaryFile: String) extends Module {
   IDBarrier.inALUop            := ID.io.ALUop
   IDBarrier.inReadData1        := ID.io.readData1
   IDBarrier.inReadData2        := ID.io.readData2
-  IDBarrier.inBTBHit           := IFBarrier.outBTBHit
-  IDBarrier.inBTBPrediction    := IFBarrier.outBTBPrediction
-  IDBarrier.inBTBTargetPredict := IFBarrier.outBTBTargetPredict
+  IDBarrier.inpredictorHit           := IFBarrier.outpredictorHit
+  IDBarrier.inpredictorPrediction   := IFBarrier.outpredictorPrediction
+  IDBarrier.inpredictorpredictedTarget:= IFBarrier.outpredictorpredictedTarget
 
   //Execute stage
   EX.io.instruction           := IDBarrier.outInstruction
@@ -120,8 +121,8 @@ class top_MC(BinaryFile: String) extends Module {
   EX.io.ALUop                 := IDBarrier.outALUop
   EX.io.ALUresultEXB          := EXBarrier.outALUResult
   EX.io.ALUresultMEMB         := writeBackData
-  EX.io.btbHit                := IDBarrier.outBTBHit
-  EX.io.btbTargetPredict      := IDBarrier.outBTBTargetPredict
+  EX.io.predictorHit                := IDBarrier.outpredictorHit
+  EX.io.predictorpredictedTarget     := IDBarrier.outpredictorpredictedTarget
 
   // Hazard Unit
   HzdUnit.io.controlSignalsEXB  := EXBarrier.outControlSignals
@@ -134,7 +135,7 @@ class top_MC(BinaryFile: String) extends Module {
   HzdUnit.io.rdAddrEXB          := EXBarrier.outRd
   HzdUnit.io.rdAddrMEMB         := MEMBarrier.outRd
   HzdUnit.io.branchTaken        := EX.io.branchCond
-  HzdUnit.io.btbPrediction      := IDBarrier.outBTBPrediction
+  HzdUnit.io.predictorPrediction      := IDBarrier.outpredictorPrediction
   HzdUnit.io.branchType         := IDBarrier.outBranchType
 
   //Signals to EXBarrier

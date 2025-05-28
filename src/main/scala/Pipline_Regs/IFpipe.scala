@@ -22,12 +22,12 @@ class IFpipe extends Module
       val inInstruction       = Input(new Instruction)
       val stall               = Input(Bool())
       val flush               = Input(Bool())
-      val inBTBHit            = Input(Bool())
-      val inBTBPrediction     = Input(Bool())
-      val inBTBTargetPredict  = Input(UInt(32.W))
-      val outBTBHit           = Output(Bool())
-      val outBTBPrediction    = Output(Bool())
-      val outBTBTargetPredict = Output(UInt(32.W))
+      val inpredictorHit            = Input(Bool())
+      val inpredictorPrediction     = Input(Bool())
+      val inpredictorpredictedTarget  = Input(UInt(32.W))
+      val outpredictorHit           = Output(Bool())
+      val outpredictorPrediction    = Output(Bool())
+      val outpredictorpredictedTarget = Output(UInt(32.W))
       val outCurrentPC        = Output(UInt(32.W))
       val outInstruction      = Output(new Instruction)
     }
@@ -39,17 +39,17 @@ class IFpipe extends Module
   flushDelayed := io.flush // Note: Delay flush signal because io.outInstruction is combinational (because Read iMem is synchronous)
 
   // Propagate BTB signals
-  val btbHitReg        = RegInit(false.B)
-  val btbPredictionReg = RegInit(false.B)
-  val btbTargetPredict = RegInit(0.U(32.W))
+  val predictorHitReg        = RegInit(false.B)
+  val predictorPredictionReg = RegInit(false.B)
+  val predictorpredictedTarget = RegInit(0.U(32.W))
 
-  btbHitReg        := io.inBTBHit
-  btbPredictionReg := io.inBTBPrediction
-  btbTargetPredict := io.inBTBTargetPredict
+  predictorHitReg        := io.inpredictorHit
+  predictorPredictionReg := io.inpredictorPrediction
+  predictorpredictedTarget := io.inpredictorpredictedTarget
 
-  io.outBTBHit           := btbHitReg
-  io.outBTBPrediction    := btbPredictionReg
-  io.outBTBTargetPredict := btbTargetPredict
+  io.outpredictorHit          := predictorHitReg
+  io.outpredictorPrediction   := predictorPredictionReg
+  io.outpredictorpredictedTarget := predictorpredictedTarget
 
   // Flush, Stall, or Propagate Instruction
   when(flushDelayed === 1.U){
