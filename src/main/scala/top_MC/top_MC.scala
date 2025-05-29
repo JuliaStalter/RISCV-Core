@@ -30,6 +30,7 @@ class top_MC(BinaryFile: String) extends Module {
       val regUpdates   = Output(new RegisterUpdates)
       val memUpdates   = Output(new MemUpdates)
       val currentPC    = Output(UInt(32.W))
+      val predictorMode = Input(UInt(2.W))
     }
   )
 
@@ -74,6 +75,7 @@ class top_MC(BinaryFile: String) extends Module {
   IF.io.branchAddr         := EX.io.branchTarget
   IF.io.branchMispredicted := HzdUnit.io.branchMispredicted
   IF.io.PCplus4ExStage     := EX.io.outPCplus4
+ IF.io.predictionMode      := testHarness.predictorMode
 
   //Signals to IFBarrier
   IFBarrier.inCurrentPC        := IF.io.PC
@@ -123,7 +125,7 @@ class top_MC(BinaryFile: String) extends Module {
   EX.io.ALUresultMEMB         := writeBackData
   EX.io.predictorHit                := IDBarrier.outpredictorHit
   EX.io.predictorpredictedTarget     := IDBarrier.outpredictorpredictedTarget
-
+  EX.io.predictorMode := testHarness.predictorMode
   // Hazard Unit
   HzdUnit.io.controlSignalsEXB  := EXBarrier.outControlSignals
   HzdUnit.io.controlSignalsMEMB := MEMBarrier.outControlSignals
@@ -137,6 +139,7 @@ class top_MC(BinaryFile: String) extends Module {
   HzdUnit.io.branchTaken        := EX.io.branchCond
   HzdUnit.io.predictorPrediction      := IDBarrier.outpredictorPrediction
   HzdUnit.io.branchType         := IDBarrier.outBranchType
+ HzdUnit.io.predictorMode    := testHarness.predictorMode
 
   //Signals to EXBarrier
   EXBarrier.inALUResult       := EX.io.ALUResult

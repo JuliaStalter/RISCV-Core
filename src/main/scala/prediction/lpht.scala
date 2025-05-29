@@ -26,42 +26,34 @@ class lpht extends Module {
     val lphtpredictedTarget = Output(UInt(32.W))
   })
 
-  val lht = RegInit(VecInit(Seq.fill(2)(false.B)))
+  val lht = RegInit(VecInit(Seq(true.B,false.B)))
 
   val TargetTable = RegInit(VecInit(Seq.fill(64)(0.U(32.W))))
   val validTable = RegInit(VecInit(Seq.fill(64)(false.B)))
 
-  val index =Wire(UInt(6.W))
-  index := Mux(io.update,io.entryPC(7,2), io.pc(7,2))
+  val predIndex = io.pc(7,2)
+  val updateIndex = io.entryPC(7,2)
 
-  val target = TargetTable(index)
-  val valid = validTable(index)
 
-  io.prediction := WireDefault(false.B)
-  io.nextPC := WireDefault(io.pc + 4.U)
-  io.lphtpredictedTarget := WireDefault(0.U)
-  io.lphtHit := WireDefault(false.B)
+  val prediction = WireDefault(false.B)
+
+  val lhtBits = Cat(lht(1), lht(0))
+  val predictedTarget = TargetTable(predIndex)
+  val isValid         = validTable(predIndex)
+
 
 
   when(io.preloadEnable) {
     lht(0) := 1.U
     lht(1) := 1.U
   }
+
+
   when(io.update) {
     lht(1) := lht(0)
     lht(0) := io.branchTaken
 
-
-    when(io.branchTaken) {
-      TargetTable(io.entryPC(7, 2)) := io.entryTarget
-      validTable(io.entryPC(7, 2)) := true.B
-    }
   }
-
-
-  val prediction = WireDefault(false.B)
-
-  val lhtBits = Cat(lht(1), lht(0))
   switch(lhtBits) {
 
     is("b11".U) {
@@ -79,11 +71,20 @@ class lpht extends Module {
   }
   io.prediction := prediction
 
+  val regPrediction = RegNext(prediction)
+  val regValid      = RegNext(validTable(predIndex))
+  val regTarget     = RegNext(TargetTable(predIndex))
 
+  io.prediction          := regPrediction
+  io.lphtHit             := regPrediction && regValid
+  io.lphtpredictedTarget := Mux(io.lphtHit, regTarget, 0.U)
+  io.nextPC              := Mux(io.lphtHit, regTarget, io.pc + 4.U)
+  io.correctPrediction   := (prediction === io.branchTaken)
+  io.predictTaken := regPrediction
 
-  io.nextPC := Mux(prediction, target, io.pc + 4.U)
-  io.lphtpredictedTarget := Mux(prediction && valid, target, 0.U)
-  io.lphtHit := prediction && valid
-  io.predictTaken := io.branchTaken === prediction
-  io.correctPrediction := io.predictTaken
+    when(io.branchTaken) {
+      TargetTable(updateIndex) := io.entryTarget
+      validTable(updateIndex) := true.B
+    }
+
 }

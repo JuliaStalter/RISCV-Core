@@ -124,16 +124,15 @@ class IF(BinaryFile: String) extends Module
 
     is(0.U) { // No predictor
       io.predictorPrediction               := false.B
-      lpht.io.update                      := false.B
-      gpht.io.update                      := false.B
-      hybrid.io.update                    := false.B
-      BTB.io.updatePrediction             := false.B
+      lpht.io.update                       := false.B
+      gpht.io.update                        := false.B
+      hybrid.io.update                     := false.B
       io.predictorpredictedTarget         := PC + 4.U
       io.predictorHit                     := false.B
     }
     is(1.U) { //lpht
       io.predictorPrediction              := lpht.io.prediction
-      io.predictorpredictedTarget         := lpht.io.lphtpredictedTarget
+      io.predictorpredictedTarget         := Mux(lpht.io.lphtHit, lpht.io.lphtpredictedTarget, 0.U)
       io.predictorHit                     := lpht.io.lphtHit
 
       gpht.io.update                      := false.B
@@ -177,26 +176,23 @@ class IF(BinaryFile: String) extends Module
     PC := nextPC
   }
   //Mux for controlling which address to go to next
-  when(io.branchMispredicted === 1.U){  // Case of branch mispredicted, we realize that in EX stage
-    when(io.branchBehavior === 1.U){  // Branch Behavior is Taken, but Predicted Not-Taken
+  when (io.branchMispredicted) {
+
+    when (io.branchBehavior) {
       nextPC := io.branchAddr
-    }
-    .otherwise{
+    } .otherwise {
       nextPC := io.PCplus4ExStage
     }
-  }
-  .elsewhen(BTB.io.btbHit === 1.B){  // BTB hits -> Choose nextPC as per the prediction
-    when(BTB.io.prediction === 1.B){  // Predict taken
-      nextPC := BTB.io.targetAdr
-    }
-    .otherwise{ // Predict not taken
-      nextPC := PCplus4
-    }
-  }
-  .otherwise{ // Normal instruction OR assume not taken (BTB miss)
+  } .elsewhen (io.predictionMode === 0.U  && io.newBranch === 1.B) {
+
+    nextPC := io.branchAddr
+  } .elsewhen (io.predictorHit && io.predictorPrediction) {
+
+    nextPC := io.predictorpredictedTarget
+  } .otherwise {
+
     nextPC := PCplus4
   }
-  
   // Send PC to the rest of the pipeline
   io.PC := PC
 

@@ -35,6 +35,8 @@ class RISCV_TOP(BinaryFile: String) extends Module{
       val regsWriteData          = Input(UInt(32.W))
       val regsAddr               = Input(UInt(5.W))
       val regsWriteEnable        = Input(Bool())
+      val predictionMode = Input(UInt(2.W))
+
       val regsReadData           = Output(UInt(32.W))
 
       val regsDeviceWriteEnable  = Output(Bool())
@@ -69,7 +71,7 @@ class RISCV_TOP(BinaryFile: String) extends Module{
   top_MC.setupSignals.registerSignals.writeAddress := io.regsAddr
   top_MC.setupSignals.registerSignals.writeData    := io.regsWriteData
   top_MC.setupSignals.registerSignals.setup        := io.setup
-
+  top_MC.predictorMode := io.predictionMode
   io.DMEMReadData := top_MC.testReadouts.DMEMread
   io.regsReadData := top_MC.testReadouts.registerRead
 
