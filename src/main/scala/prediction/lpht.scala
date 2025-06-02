@@ -26,7 +26,7 @@ class lpht extends Module {
     val lphtpredictedTarget = Output(UInt(32.W))
   })
 
-  val lht = RegInit(VecInit(Seq(true.B,false.B)))
+  val lht = RegInit(VecInit(Seq(false.B,false.B)))
 
   val TargetTable = RegInit(VecInit(Seq.fill(64)(0.U(32.W))))
   val validTable = RegInit(VecInit(Seq.fill(64)(false.B)))
@@ -46,6 +46,9 @@ class lpht extends Module {
   when(io.preloadEnable) {
     lht(0) := 1.U
     lht(1) := 1.U
+    TargetTable(predIndex) := io.entryTarget
+    validTable(predIndex)  := true.B
+
   }
 
 
@@ -54,6 +57,7 @@ class lpht extends Module {
     lht(0) := io.branchTaken
 
   }
+
   switch(lhtBits) {
 
     is("b11".U) {
@@ -69,7 +73,7 @@ class lpht extends Module {
       prediction := true.B
     }
   }
-  io.prediction := prediction
+  //io.prediction := prediction
 
   val regPrediction = RegNext(prediction)
   val regValid      = RegNext(validTable(predIndex))
@@ -77,7 +81,7 @@ class lpht extends Module {
 
   io.prediction          := regPrediction
   io.lphtHit             := regPrediction && regValid
-  io.lphtpredictedTarget := Mux(io.lphtHit, regTarget, 0.U)
+  io.lphtpredictedTarget := Mux(io.lphtHit, regTarget, io.pc + 4.U)
   io.nextPC              := Mux(io.lphtHit, regTarget, io.pc + 4.U)
   io.correctPrediction   := (prediction === io.branchTaken)
   io.predictTaken := regPrediction

@@ -111,7 +111,9 @@ class IF(BinaryFile: String) extends Module
   hybrid.io.shiftHistory := io.shiftHistory
   hybrid.io.resetHistory := false.B
   hybrid.io.mispredicted := io.branchMispredicted
-  hybrid.io.actualTarget := Mux(io.branchBehavior, io.branchAddr, io.PCplus4ExStage)
+  hybrid.io.actualTarget := io.branchAddr
+  hybrid.io.entryPC       := io.entryPC
+  hybrid.io.entryTarget  := io.branchAddr
 
 
   //default values before predictionMode is set
@@ -132,7 +134,7 @@ class IF(BinaryFile: String) extends Module
     }
     is(1.U) { //lpht
       io.predictorPrediction              := lpht.io.prediction
-      io.predictorpredictedTarget         := Mux(lpht.io.lphtHit, lpht.io.lphtpredictedTarget, 0.U)
+      io.predictorpredictedTarget         := lpht.io.lphtpredictedTarget
       io.predictorHit                     := lpht.io.lphtHit
 
       gpht.io.update                      := false.B

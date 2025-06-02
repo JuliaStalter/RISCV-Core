@@ -3,14 +3,14 @@ import chisel3._
 import chiseltest._
 import org.scalatest.flatspec.AnyFlatSpec
 import RISCV_TOP.RISCV_TOP
-class loop_test extends AnyFlatSpec with ChiselScalatestTester {
-  behavior of "none"
-  it should "loop_20_new" in {
-    test(new RISCV_TOP("src/test/programs/loop_test"))
+class fir_filter_test extends AnyFlatSpec with ChiselScalatestTester {
+  behavior of "all"
+  it should "filter" in {
+    test(new RISCV_TOP("src/test/programs/fir_filter"))
       .withAnnotations(Seq(WriteVcdAnnotation)) { dut =>
 
         dut.io.setup.poke(1.B)
-        dut.io.predictionMode.poke(1.U)
+        dut.io.predictionMode.poke(2.U)
         dut.clock.step()
         disableTestSignals
 

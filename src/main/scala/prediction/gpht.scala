@@ -37,12 +37,6 @@ class gpht(val historyLength: Int = 3, val tableSize: Int = 1024) extends Module
   val predictedTarget = predictionTable(readindex)
 
 
-
-
-
-
-
-
   when(doWrite) {
 
     predictionTable(writeindex) := writeData
